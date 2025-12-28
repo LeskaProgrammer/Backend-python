@@ -1,2 +1,8 @@
-def get_ordered_products_by_price(products):
-    pass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from models.product import Product
+
+
+def get_ordered_products_by_price(products: list['Product']) -> list['Product']:
+    return sorted(products, key=lambda p: p.price, reverse=True)
