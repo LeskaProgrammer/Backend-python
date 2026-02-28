@@ -2,8 +2,13 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.filters import SearchFilter, OrderingFilter
+from django.db.models import Count
 from .models import Note, Comment, NoteLike, CommentLike
-from .serializers import NoteSerializer, CommentSerializer, UserSerializer
+from .serializers import (
+    NoteSerializer, CommentSerializer, UserSerializer,
+    NoteLikeSerializer, CommentLikeSerializer,
+    NoteLightSerializer, CommentLightSerializer
+)
 from django.contrib.auth.models import User
 
 
@@ -11,6 +16,42 @@ class UserViewSet(viewsets.ModelViewSet):
     """CRUD для пользователей"""
     queryset = User.objects.all()
     serializer_class = UserSerializer
+    
+    @action(detail=False, methods=['get'])
+    def top_by_notes(self, request):
+        """Топ пользователей по количеству заметок"""
+        limit = int(request.query_params.get('limit', 10))
+        users = User.objects.annotate(
+            notes_count=Count('notes')
+        ).filter(notes_count__gt=0).order_by('-notes_count')[:limit]
+        
+        data = [
+            {
+                'id': user.id,
+                'username': user.username,
+                'notes_count': user.notes_count
+            }
+            for user in users
+        ]
+        return Response(data)
+    
+    @action(detail=False, methods=['get'])
+    def top_by_comments(self, request):
+        """Топ пользователей по количеству комментариев"""
+        limit = int(request.query_params.get('limit', 10))
+        users = User.objects.annotate(
+            comments_count=Count('comments')
+        ).filter(comments_count__gt=0).order_by('-comments_count')[:limit]
+        
+        data = [
+            {
+                'id': user.id,
+                'username': user.username,
+                'comments_count': user.comments_count
+            }
+            for user in users
+        ]
+        return Response(data)
 
 
 class NoteViewSet(viewsets.ModelViewSet):
@@ -70,6 +111,52 @@ class NoteViewSet(viewsets.ModelViewSet):
         notes = Note.objects.filter(author=request.user)
         serializer = self.get_serializer(notes, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def popular(self, request):
+        """Популярные заметки (по количеству лайков)"""
+        limit = int(request.query_params.get('limit', 10))
+        notes = Note.objects.filter(likes_count__gt=0).order_by('-likes_count')[:limit]
+        serializer = NoteLightSerializer(notes, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def pinned(self, request):
+        """Закрепленные заметки"""
+        notes = Note.objects.filter(is_pinned=True).order_by('-created_at')
+        serializer = NoteLightSerializer(notes, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Статистика по заметкам"""
+        total_notes = Note.objects.count()
+        pinned_notes = Note.objects.filter(is_pinned=True).count()
+        total_likes = Note.objects.aggregate(total=Count('notelike'))['total'] or 0
+        
+        # Самая популярная заметка
+        most_liked = Note.objects.order_by('-likes_count').first()
+        most_liked_data = None
+        if most_liked:
+            most_liked_data = {
+                'id': most_liked.id,
+                'title': most_liked.title,
+                'likes_count': most_liked.likes_count
+            }
+        
+        return Response({
+            'total_notes': total_notes,
+            'pinned_notes': pinned_notes,
+            'total_likes': total_likes,
+            'most_liked_note': most_liked_data
+        })
+    
+    @action(detail=False, methods=['get'])
+    def lightweight(self, request):
+        """Легковесный список заметок (без комментариев)"""
+        notes = self.filter_queryset(self.get_queryset())
+        serializer = NoteLightSerializer(notes, many=True)
+        return Response(serializer.data)
 
 
 class CommentViewSet(viewsets.ModelViewSet):
@@ -110,3 +197,32 @@ class CommentViewSet(viewsets.ModelViewSet):
             return Response({'status': 'unliked', 'likes_count': comment.likes_count})
         except CommentLike.DoesNotExist:
             return Response({'status': 'not liked'}, status=400)
+    
+    @action(detail=False, methods=['get'])
+    def popular(self, request):
+        """Популярные комментарии (по количеству лайков)"""
+        limit = int(request.query_params.get('limit', 10))
+        comments = Comment.objects.filter(likes_count__gt=0).order_by('-likes_count')[:limit]
+        serializer = CommentLightSerializer(comments, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def by_author(self, request):
+        """Комментарии конкретного автора"""
+        author_id = request.query_params.get('author_id')
+        if not author_id:
+            return Response({'error': 'author_id parameter is required'}, status=400)
+        
+        comments = Comment.objects.filter(author_id=author_id).order_by('-created_at')
+        serializer = CommentLightSerializer(comments, many=True)
+        return Response(serializer.data)
+
+
+class NoteLikeViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = NoteLike.objects.all()
+    serializer_class = NoteLikeSerializer
+
+
+class CommentLikeViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = CommentLike.objects.all()
+    serializer_class = CommentLikeSerializer

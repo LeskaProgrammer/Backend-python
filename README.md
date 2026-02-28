@@ -1,6 +1,15 @@
 # Notes API
 
-ДЗ5 по бэкенду на Python (Django + Django REST Framework)
+ДЗ6 по бэкенду на питоне
+
+## Что добавлено в ДЗ6
+
+- Миграция данных (`0002_seed_data.py`) — моковые данные (4 пользователя, 7 заметок, 8 комментариев, лайки)
+- Сериализаторы для NoteLike, CommentLike + легковесные (NoteLightSerializer, CommentLightSerializer)
+- ViewSets для всех моделей, включая ReadOnly для лайков
+- Кастомные агрегированные эндпоинты: `popular`, `pinned`, `stats`, `lightweight`, `top_by_notes`, `top_by_comments`, `by_author`
+- Dockerfile для поднятия бэкенда
+- Инструкция по применению миграций в README
 
 ## Что сделано
 
@@ -43,3 +52,17 @@ notes_api/
     ├── requirements.txt      # зависимости Python
     └── Makefile              # команды для запуска
 ```
+
+## Применение миграций
+
+```bash
+cd backend
+pip install -r requirements.txt
+python manage.py migrate
+```
+
+После `migrate` автоматически создаются тестовые данные (миграция `0002_seed_data`):
+- admin / admin123 (суперпользователь)
+- ivan_ivanov / password123
+- maria_petrova / password123
+- alex_smirnov / password123
