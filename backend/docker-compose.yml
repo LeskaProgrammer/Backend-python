@@ -1,0 +1,17 @@
+services:
+  backend:
+    build: .
+    container_name: notes-api-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - sqlite_data:/app/data
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - PYTHONUNBUFFERED=1
+    command: sh -c "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    restart: unless-stopped
+
+volumes:
+  sqlite_data:
